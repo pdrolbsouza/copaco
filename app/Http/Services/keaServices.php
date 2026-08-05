@@ -1,28 +1,20 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Services;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Models\Rede;
-use App\Models\Equipamento;
-use App\Models\Config;
-use App\Utils\NetworkOps;
-use App\Utils\Utils;
-use IPTools\Network;
-
-class KeaController extends Controller
+class keaService
 {
-    public function kea(Request $request)
-    {
-        if ($request->consumer_deploy_key != config('copaco.consumer_deploy_key')) {
-            return response()->json(['error' => 'Unauthorized action.'], 403);
-        }
+
+    public function getConfigKea(bool $unique = false) {
 
         $date = Utils::ItensUpdatedAt();
 
-        $dhcp_global = Config::where('key', 'dhcp_global')->first();
-        $globalOptions = $this->parseGlobalOptions($dhcp_global->value ?? '');
+        $globalOptions = $this->parseGlobalOptions();
+
+        if ($unique) {
+            $reservation = $this->getReservation();
+        }
+
         $keaConfig = [
             'Dhcp4' => [
                 'interfaces-config' => [
@@ -51,30 +43,10 @@ class KeaController extends Controller
             ],
         ];
 
-        $sharedNetworkConfig = Config::where('key', 'shared_network')->first();
-        if (empty($sharedNetworkConfig)) {
-            // Todas as redes com active_dhcp=1 vão para a shared-network "default"
-            $redes = Rede::where('active_dhcp', 1)->get();
-            if ($redes->isNotEmpty()) {
-                $keaConfig['Dhcp4']['shared-networks'][] = $this->buildSharedNetwork('default', $redes);
-            }
-        } else {
-            $sharedNetworksList = array_map('trim', explode(',', $sharedNetworkConfig->value));
-            if (!in_array('default', $sharedNetworksList)) {
-                $sharedNetworksList[] = 'default';
-            }
-            foreach ($sharedNetworksList as $sn) {
-                $redes = Rede::where('shared_network', $sn)->where('active_dhcp', 1)->get();
-                if ($redes->isNotEmpty()) {
-                    $keaConfig['Dhcp4']['shared-networks'][] = $this->buildSharedNetwork($sn, $redes);
-                }
-            }
-        }
-
-        return response()->json($keaConfig, 200, ['Content-Type' => 'application/json']);
+        return $keaConfig;
     }
 
-    private function buildSharedNetwork(string $name, $redes)
+    public function buildSharedNetwork(string $name, $redes)
     {
         $sharedNetwork = [
             'name' => $name,
@@ -169,6 +141,10 @@ class KeaController extends Controller
      */
     private function parseGlobalOptions($globalConfigText)
     {
+        $dhcp_global = Config::where('key', 'dhcp_global')->first();
+
+        if(empty($dhcp_global)) return null;
+
         $options = [];
         // Parse simplificado: procura linhas com "option <nome> <valor>;"
         $lines = explode("\n", $globalConfigText);
@@ -185,16 +161,34 @@ class KeaController extends Controller
         return $options;
     }
 
-    /**
-     * Geração de configuração Kea para rede única (não segmentada)
-     * Baseado em uniquedhcpd()
-     */
-    public function uniquekeab(Request $request)
-    {
-        if ($request->consumer_deploy_key != config('copaco.consumer_deploy_key')) {
-            return response()->json(['error' => 'Unauthorized action.'], 403);
+
+    public static SharedNetwork() {
+        $sharedNetworkConfig = Config::where('key', 'shared_network')->first();
+
+        if (empty($sharedNetworkConfig)) {
+            // Todas as redes com active_dhcp=1 vão para a shared-network "default"
+            $redes = Rede::where('active_dhcp', 1)->get();
+            if ($redes->isNotEmpty()) {
+                $keaConfig['Dhcp4']['shared-networks'][] = $this->buildSharedNetwork('default', $redes);
+            }
+        } else {
+            $sharedNetworksList = array_map('trim', explode(',', $sharedNetworkConfig->value));
+            if (!in_array('default', $sharedNetworksList)) {
+                $sharedNetworksList[] = 'default';
+            }
+            foreach ($sharedNetworksList as $sn) {
+                $redes = Rede::where('shared_network', $sn)->where('active_dhcp', 1)->get();
+                if ($redes->isNotEmpty()) {
+                    $keaConfig['Dhcp4']['shared-networks'][] = $this->buildSharedNetwork($sn, $redes);
+                }
+            }
         }
 
+        return $sharedNetworkConfig;
+    }
+
+    private function getReservation() {
+        $sharedNetworkConfig = KeaService::sharedNetwork();
         $iprede = Config::where('key', 'unique_iprede')->first();
         $gateway = Config::where('key', 'unique_gateway')->first();
         $cidr = Config::where('key', 'unique_cidr')->first();
@@ -230,47 +224,7 @@ class KeaController extends Controller
                 $ipsAlocados[] = $ip;
             }
         }
-
-        $dhcp_global = Config::where('key', 'dhcp_global')->first();
-        $globalOptions = $this->parseGlobalOptions($dhcp_global->value ?? '');
-
-        $keaConfig = [
-            'Dhcp4' => [
-                'interfaces-config' => ['interfaces' => ['*']],
-                'lease-database' => [
-                    'type' => 'memfile',
-                    'name' => '/var/lib/kea/kea-leases4.csv',
-                ],
-                'control-socket' => [
-                    'socket-type' => 'unix',
-                    'socket-name' => '/tmp/kea4-ctrl-socket',
-                ],
-                'loggers' => [
-                    [
-                        'name' => 'kea-dhcp4',
-                        'severity' => 'INFO',
-                        'output_options' => [
-                            ['output' => '/var/log/kea/kea-dhcp4.log'],
-                        ],
-                    ],
-                ],
-                'option-data' => $globalOptions,
-                'subnet4' => [
-                    [
-                        'subnet' => "{$iprede}/{$cidr}",
-                        'pools' => [
-                            ['pool' => "{$rangeBegin} - {$rangeEnd}"],
-                        ],
-                        'option-data' => [
-                            ['name' => 'routers', 'data' => $gateway],
-                            ['name' => 'broadcast-address', 'data' => $broadcast],
-                        ],
-                        'reservations' => $reservations,
-                    ],
-                ],
-            ],
-        ];
-
-        return response()->json($keaConfig, 200, ['Content-Type' => 'application/json']);
+        return $reservation;
     }
 }
+
