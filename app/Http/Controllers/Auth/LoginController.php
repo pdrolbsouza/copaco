@@ -80,7 +80,6 @@ class LoginController extends Controller
             }
 
         }
-        $login = true;
 
         if (!$login) {
             $request->session()->flash('alert-danger', 'Usuário sem acesso ao sistema.');
