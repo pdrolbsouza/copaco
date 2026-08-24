@@ -20,8 +20,8 @@ class RedeCrudTest extends DuskTestCase
             // Início do teste crud
             //Create
             $browser->visit('/redes')
-                ->Pause(3000)
-                ->assertSee('Adicionar Rede')
+                ->Pause(5000)
+                ->assertSee('Nº de Redes Cadastradas:')
                 ->visit('/redes/create')
                 ->assertSee('Cadastrar Rede')
                 ->type('nome', 'Rede Teste')
