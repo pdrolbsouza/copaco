@@ -10,10 +10,11 @@ class NavegacaoTest extends DuskTestCase
     public function test_navegacao()
     {
         $this->browse(function (Browser $browser) {
-            $browser->visit('/login')
-                ->clickLink('Faça login usando senha única USP!');
+            $browser->visit('/')
+                ->clickLink('login USP');
             $browser->waitFor('#loginUsuario')
-                ->type('#loginUsuario', '1111')
+                ->type('#callback', 'http://copaco/callback')
+                ->type('#loginUsuario', '111111')
                 ->press('Login');
 
             $browser->visit('/')
@@ -30,6 +31,7 @@ class NavegacaoTest extends DuskTestCase
                 ->visit('/config')
                 ->assertSee('Configurações')
                 ->visit('/roles')
+                ->Pause(2000)
                 ->assertSee('Adicionar Grupo')
                 ->visit('/users')
                 ->assertSee('Nome de Usuário');

@@ -11,11 +11,11 @@ class RedeCrudTest extends DuskTestCase
     public function test_rede_crud()
     {
         $this->browse(function (Browser $browser) {
-            // Login obrigatório
-            $browser->visit('/login')
-                ->clickLink('Faça login usando senha única USP!');
+            $browser->visit('/')
+                ->clickLink('login USP');
             $browser->waitFor('#loginUsuario')
-                ->type('#loginUsuario', '1111')
+                ->type('#callback', 'http://copaco/callback')
+                ->type('#loginUsuario', '111111')
                 ->press('Login');
             // Início do teste crud
             //Create
