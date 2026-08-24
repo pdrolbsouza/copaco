@@ -24,6 +24,7 @@ class EquipamentoCrudTest extends DuskTestCase
                 ->Pause(3000)
                 ->assertSee('Adicionar Rede')
                 ->visit('/redes/create')
+                ->Pause(3000)                
                 ->assertSee('Cadastrar Rede')
                 ->type('nome', 'Rede Teste')
                 ->type('iprede', '141.232.67.0')
