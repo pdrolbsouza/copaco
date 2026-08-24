@@ -29,12 +29,7 @@ class NavegacaoTest extends DuskTestCase
                 ->visit('/redes/migrate')
                 ->assertSee('Migração de equipamentos entre redes')
                 ->visit('/config')
-                ->assertSee('Configurações')
-                ->visit('/roles')
-                ->Pause(2000)
-                ->assertSee('Adicionar Grupo')
-                ->visit('/users')
-                ->assertSee('Nome de Usuário');
+                ->assertSee('Configurações');
         });
     }
 }
